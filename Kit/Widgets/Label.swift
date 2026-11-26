@@ -39,7 +39,8 @@ public class Label: WidgetWrapper {
         super.draw(dirtyRect)
         
         let size: CGSize = CGSize(width: 6, height: self.frame.height / 3)
-        var margin: CGPoint = CGPoint(x: Constants.Widget.margin.x, y: 0)
+        let x = max(Constants.Widget.margin.x, (self.bounds.width - size.width) / 2)
+        var margin: CGPoint = CGPoint(x: x, y: 0)
         let style = NSMutableParagraphStyle()
         style.alignment = .center
         

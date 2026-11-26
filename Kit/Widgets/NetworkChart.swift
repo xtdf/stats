@@ -163,6 +163,10 @@ public class NetworkChart: WidgetWrapper {
             x = letterWidth + Constants.Widget.spacing
         }
         
+        let fitted = self.layoutWidth(width)
+        originWidth += fitted - width
+        width = fitted
+        
         let box = NSBezierPath(roundedRect: NSRect(
             x: x + offset,
             y: offset,

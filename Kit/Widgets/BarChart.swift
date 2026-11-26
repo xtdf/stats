@@ -160,6 +160,8 @@ public class BarChart: WidgetWrapper {
             x = letterWidth + Constants.Widget.spacing
         }
         
+        width = self.layoutWidth(width)
+        
         let box = NSBezierPath(roundedRect: NSRect(
             x: x + offset,
             y: offset,

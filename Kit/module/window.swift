@@ -286,6 +286,7 @@ open class Window: NSStackView {
             let widgetSelector = WidgetSelectorView(module: self.config.name, widgets: self.widgets, stateCallback: self.loadWidget)
             self.widgetSelector = widgetSelector
             
+            view.addArrangedSubview(self.displayWidthSection())
             view.addArrangedSubview(widgetSelector)
             
             if let settingsView = self.moduleSettings {
@@ -386,6 +387,7 @@ open class Window: NSStackView {
     
     private func loadModuleSettings() {
         self.moduleSettingsContainer?.subviews.forEach{ $0.removeFromSuperview() }
+        self.moduleSettingsContainer?.addArrangedSubview(self.displayWidthSection())
         
         if let settingsView = self.moduleSettings {
             settingsView.load(widgets: self.widgets.filter{ $0.isActive }.map{ $0.type })
@@ -443,6 +445,28 @@ open class Window: NSStackView {
         }
     }
     
+    private func displayWidthSection() -> NSView {
+        let module = self.config.name
+        let preset = WidgetWrapper.defaultDisplayWidth(module: module)
+        let stored = Store.shared.int(key: "\(module)_displayWidth", defaultValue: preset)
+        let enabled = stored > 0
+        let stepper = PointStepper(value: enabled ? stored : (preset > 0 ? preset : 48)) { value in
+            WidgetWrapper.updateDisplayWidth(value, module: module)
+        }
+        let toggle = PreferencesSwitch(action: { sender in
+            let on = controlState(sender)
+            let width = on ? max(stepper.value, 16) : 0
+            if on {
+                stepper.setValue(width)
+            }
+            WidgetWrapper.updateDisplayWidth(width, module: module)
+        }, state: enabled, with: stepper)
+        
+        return PreferencesSection([
+            PreferencesRow(localizedString("Display width"), component: toggle)
+        ])
+    }
+    
     @objc func switchTabs(sender: NSSegmentedControl) {
         self.tabView?.selectTabViewItem(at: sender.selectedSegment)
     }
@@ -477,6 +501,97 @@ open class Window: NSStackView {
         if let settings = self.settingsView {
             settings.isHidden = !settings.isHidden
         }
+    }
+}
+
+private final class PointStepper: NSStackView, NSTextFieldDelegate, PreferencesSwitchWith_p {
+    private let onChange: (Int) -> Void
+    private let field = NSTextField()
+    private let stepper = NSStepper()
+    private let minimum = 16
+    private let maximum = 320
+    
+    var value: Int {
+        self.stepper.integerValue
+    }
+    
+    var isEnabled: Bool {
+        get { self.field.isEnabled }
+        set {
+            self.field.isEnabled = newValue
+            self.stepper.isEnabled = newValue
+        }
+    }
+    
+    init(value: Int, onChange: @escaping (Int) -> Void) {
+        self.onChange = onChange
+        super.init(frame: .zero)
+        
+        self.orientation = .horizontal
+        self.alignment = .centerY
+        self.spacing = 2
+        
+        let initial = min(self.maximum, max(self.minimum, value))
+        self.field.font = NSFont.systemFont(ofSize: 12, weight: .regular)
+        self.field.alignment = .right
+        self.field.isEditable = true
+        self.field.isSelectable = true
+        self.field.usesSingleLineMode = true
+        self.field.maximumNumberOfLines = 1
+        self.field.focusRingType = .none
+        self.field.delegate = self
+        self.field.stringValue = "\(initial)"
+        self.field.translatesAutoresizingMaskIntoConstraints = false
+        self.field.widthAnchor.constraint(equalToConstant: 42).isActive = true
+        
+        self.stepper.minValue = Double(self.minimum)
+        self.stepper.maxValue = Double(self.maximum)
+        self.stepper.increment = 1
+        self.stepper.integerValue = initial
+        self.stepper.valueWraps = false
+        self.stepper.target = self
+        self.stepper.action = #selector(self.step)
+        
+        self.addArrangedSubview(self.field)
+        self.addArrangedSubview(self.stepper)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func setValue(_ value: Int) {
+        let clamped = min(self.maximum, max(self.minimum, value))
+        self.stepper.integerValue = clamped
+        self.field.stringValue = "\(clamped)"
+    }
+    
+    func controlTextDidChange(_ obj: Notification) {
+        guard let field = obj.object as? NSTextField else { return }
+        let filtered = field.stringValue.filter { "0123456789".contains($0) }
+        if filtered != field.stringValue {
+            field.stringValue = filtered
+        }
+        guard var value = Int(field.stringValue) else { return }
+        if value > self.maximum {
+            value = self.maximum
+            field.stringValue = "\(value)"
+        }
+        guard value >= self.minimum else { return }
+        self.stepper.integerValue = value
+        self.onChange(value)
+    }
+    
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard self.isEnabled, let field = obj.object as? NSTextField else { return }
+        self.setValue(Int(field.stringValue) ?? self.minimum)
+        self.onChange(self.value)
+    }
+    
+    @objc private func step(_ sender: NSStepper) {
+        let value = sender.integerValue
+        self.field.stringValue = "\(value)"
+        self.onChange(value)
     }
 }
 

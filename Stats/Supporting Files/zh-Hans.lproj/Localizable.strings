@@ -261,6 +261,7 @@
 "Popup" = "弹出窗口";
 "Notifications" = "通知";
 "Merge widgets" = "合并组件";
+"Display width" = "显示宽度";
 "No available widgets to configure" = "没有可配置的小组件";
 "No options to configure for the popup in this module" = "该组件没有可配置的选项";
 "Process" = "进程";

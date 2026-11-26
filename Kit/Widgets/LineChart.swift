@@ -153,6 +153,7 @@ public class LineChart: WidgetWrapper {
             pressureLevel = self._pressureLevel
         }
         
+        var chartWidth = self.width
         var width = self.width + (Constants.Widget.margin.x*2)
         var x: CGFloat = 0
         let lineWidth = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
@@ -188,6 +189,12 @@ public class LineChart: WidgetWrapper {
             x = letterWidth + Constants.Widget.spacing
         }
         
+        let fitted = self.layoutWidth(width)
+        let extra = fitted - width
+        chartWidth += extra
+        boxSize.width += extra
+        width = fitted
+        
         if self.valueState {
             let style = NSMutableParagraphStyle()
             style.alignment = .right
@@ -213,7 +220,7 @@ public class LineChart: WidgetWrapper {
         let box = NSBezierPath(roundedRect: NSRect(
             x: x+offset,
             y: offset,
-            width: self.width - offset*2,
+            width: chartWidth - offset*2,
             height: boxSize.height - (offset*2)
         ), xRadius: 2, yRadius: 2)
         

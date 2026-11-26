@@ -50,7 +50,9 @@ public class DotWidget: WidgetWrapper {
             value = self.value
         }
         
-        let circle = NSBezierPath(ovalIn: CGRect(x: Constants.Widget.margin.x, y: (self.frame.height - 8)/2, width: 8, height: 8))
+        let diameter: CGFloat = 8
+        let x = max(Constants.Widget.margin.x, (self.bounds.width - diameter) / 2)
+        let circle = NSBezierPath(ovalIn: CGRect(x: x, y: (self.frame.height - diameter)/2, width: diameter, height: diameter))
         value.set()
         circle.fill()
     }

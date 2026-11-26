@@ -156,14 +156,54 @@ open class WidgetWrapper: NSView, widget_p {
     public var onClick: (() -> Void)? = nil
     public var shadowSize: CGSize
     internal var queue: DispatchQueue
+    private var intrinsicWidth: CGFloat
+    
+    private static let displayWidthQueue = DispatchQueue(label: "eu.exelban.Stats.displayWidth")
+    private static var displayWidthOverrides: [String: Int] = [:]
     
     public init(_ type: widget_t, title: String, frame: NSRect) {
         self.type = type
         self.title = title
         self.shadowSize = frame.size
+        self.intrinsicWidth = frame.width
         self.queue = DispatchQueue(label: "eu.exelban.Stats.WidgetWrapper.\(type.rawValue).\(title)")
         
         super.init(frame: frame)
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(self.displayWidthChanged), name: .moduleDisplayWidth, object: nil)
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    public static func defaultDisplayWidth(module: String) -> Int {
+        switch module {
+        case "Network": return 38
+        case "CPU", "RAM": return 28
+        default: return 0
+        }
+    }
+    
+    public static func updateDisplayWidth(_ value: Int, module: String) {
+        Self.displayWidthQueue.sync {
+            Self.displayWidthOverrides[module] = value
+        }
+        Store.shared.set(key: "\(module)_displayWidth", value: value)
+        NotificationCenter.default.post(name: .moduleDisplayWidth, object: nil, userInfo: ["module": module])
+    }
+    
+    public func fixedDisplayWidth() -> CGFloat? {
+        let preset = Self.defaultDisplayWidth(module: self.title)
+        let override = Self.displayWidthQueue.sync { Self.displayWidthOverrides[self.title] }
+        let value = override ?? Store.shared.int(key: "\(self.title)_displayWidth", defaultValue: preset)
+        guard value > 0 else { return nil }
+        return CGFloat(value)
+    }
+    
+    public func layoutWidth(_ intrinsic: CGFloat) -> CGFloat {
+        guard intrinsic > 1, let fixed = self.fixedDisplayWidth() else { return intrinsic }
+        return fixed
     }
     
     required public init?(coder: NSCoder) {
@@ -171,9 +211,16 @@ open class WidgetWrapper: NSView, widget_p {
     }
     
     public func setWidth(_ width: CGFloat) {
+        let fixed = self.fixedDisplayWidth()
+        if width > 1 && (fixed == nil || abs(width - (fixed ?? 0)) > 0.5) {
+            self.intrinsicWidth = width
+        }
+        
         var newWidth = width
         if width == 0 || width == 1 {
             newWidth = self.emptyView()
+        } else if let fixed {
+            newWidth = fixed
         }
         
         guard self.shadowSize.width != newWidth else { return }
@@ -183,6 +230,15 @@ open class WidgetWrapper: NSView, widget_p {
             self.setFrameSize(NSSize(width: newWidth, height: self.frame.size.height))
             self.widthHandler?()
         }
+    }
+    
+    @objc private func displayWidthChanged(_ notification: Notification) {
+        guard notification.userInfo?["module"] as? String == self.title else { return }
+        self.shadowSize.width = -1
+        if self.intrinsicWidth > 1 {
+            self.setWidth(self.intrinsicWidth)
+        }
+        self.needsDisplay = true
     }
     
     public func emptyView() -> CGFloat {

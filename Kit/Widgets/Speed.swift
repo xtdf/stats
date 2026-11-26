@@ -159,6 +159,7 @@ public class SpeedWidget: WidgetWrapper {
     
     private func drawOneRow() -> CGFloat {
         var width: CGFloat = Constants.Widget.margin.x
+        let column = self.fixedOneRowColumn()
         
         if self.displayValueState.first == "i" {
             width = self.drawRowItem(
@@ -166,7 +167,8 @@ public class SpeedWidget: WidgetWrapper {
                 symbol: self.symbols.input,
                 iconColor: self.inputColor(self.iconColorState),
                 value: self.inputValue,
-                valueColor: self.inputColor(self.valueColorState)
+                valueColor: self.inputColor(self.valueColorState),
+                column: column
             )
         } else {
             width = self.drawRowItem(
@@ -174,7 +176,8 @@ public class SpeedWidget: WidgetWrapper {
                 symbol: self.symbols.output,
                 iconColor: self.outputColor(self.iconColorState),
                 value: self.outputValue,
-                valueColor: self.outputColor(self.valueColorState)
+                valueColor: self.outputColor(self.valueColorState),
+                column: column
             )
         }
         
@@ -186,7 +189,8 @@ public class SpeedWidget: WidgetWrapper {
                     symbol: self.symbols.input,
                     iconColor: self.inputColor(self.iconColorState),
                     value: self.inputValue,
-                    valueColor: self.inputColor(self.valueColorState)
+                    valueColor: self.inputColor(self.valueColorState),
+                    column: column
                 )
             } else {
                 width = self.drawRowItem(
@@ -194,7 +198,8 @@ public class SpeedWidget: WidgetWrapper {
                     symbol: self.symbols.output,
                     iconColor: self.outputColor(self.iconColorState),
                     value: self.outputValue,
-                    valueColor: self.outputColor(self.valueColorState)
+                    valueColor: self.outputColor(self.valueColorState),
+                    column: column
                 )
             }
         }
@@ -202,7 +207,30 @@ public class SpeedWidget: WidgetWrapper {
         return width + Constants.Widget.margin.x
     }
     
-    private func drawRowItem(initWidth: CGFloat, symbol: String, iconColor: NSColor, value: Int64, valueColor: NSColor) -> CGFloat {
+    private func fixedOneRowColumn() -> CGFloat? {
+        guard let fixed = self.fixedDisplayWidth() else { return nil }
+        let columns = max(self.displayValueState.count, 1)
+        let gap: CGFloat = self.valueState && (self.icon != "none" || self.iconAlignmentState == "right") ? 2 : 0
+        let between = columns > 1 ? Constants.Widget.spacing * 3 : 0
+        let used = (Constants.Widget.margin.x * 2) + between + CGFloat(columns) * (self.oneRowIconAdvance() + gap)
+        return max(8, (fixed - used) / CGFloat(columns))
+    }
+    
+    private func oneRowIconAdvance() -> CGFloat {
+        switch self.icon {
+        case "none":
+            return 0
+        case "chars":
+            return 10
+        case "arrows":
+            let scaleFactor = NSScreen.main?.backingScaleFactor ?? 1
+            return 3 + (scaleFactor / 2)
+        default:
+            return 8
+        }
+    }
+    
+    private func drawRowItem(initWidth: CGFloat, symbol: String, iconColor: NSColor, value: Int64, valueColor: NSColor, column: CGFloat? = nil) -> CGFloat {
         var width = initWidth
         
         if self.iconAlignmentState == "left" {
@@ -219,7 +247,7 @@ public class SpeedWidget: WidgetWrapper {
         }
         
         if self.valueState {
-            width += self.drawValue(value, offset: CGPoint(x: width, y: 0), color: valueColor)
+            width += self.drawValue(value, offset: CGPoint(x: width, y: 0), color: valueColor, column: column)
         }
         
         if self.iconAlignmentState == "right" {
@@ -240,11 +268,14 @@ public class SpeedWidget: WidgetWrapper {
         return width
     }
     
-    private func drawValue(_ value: Int64, offset: CGPoint, color: NSColor) -> CGFloat {
-        var rowWidth: CGFloat = self.unitsState ? 58 : 32
+    private func drawValue(_ value: Int64, offset: CGPoint, color: NSColor, column: CGFloat? = nil) -> CGFloat {
+        var rowWidth: CGFloat = column ?? (self.unitsState ? 58 : 32)
         let height: CGFloat = self.frame.height
         let style = NSMutableParagraphStyle()
         style.alignment = self.valueAlignment
+        if column != nil {
+            style.lineBreakMode = .byClipping
+        }
         let size: CGFloat = 10
         
         let inputStringAttributes = [
@@ -257,10 +288,10 @@ public class SpeedWidget: WidgetWrapper {
             string: Units(bytes: value).getReadableSpeed(base: self.base, unit: self.speedUnit, omitUnits: !self.unitsState),
             attributes: inputStringAttributes
         )
-        if self.speedUnit != NetworkSpeedUnitAuto {
-            rowWidth = max(rowWidth, value.size().width.rounded(.up) + (Constants.Widget.margin.x*2))
+        if column == nil {
+            rowWidth = self.columnWidth(measured: value.size().width, minimum: rowWidth)
         }
-        let rect = CGRect(x: offset.x, y: (height-size)/2 + offset.y + 1, width: rowWidth - (Constants.Widget.margin.x*2), height: size)
+        let rect = CGRect(x: offset.x, y: (height-size)/2 + offset.y + 1, width: max(rowWidth - (Constants.Widget.margin.x*2), 0), height: size)
         value.draw(with: rect)
         
         return rowWidth
@@ -375,14 +406,16 @@ public class SpeedWidget: WidgetWrapper {
                 string: Units(bytes: self.outputValue).getReadableSpeed(base: self.base, unit: self.speedUnit, omitUnits: !self.unitsState),
                 attributes: outputStringAttributes
             )
-            if self.speedUnit != NetworkSpeedUnitAuto {
-                rowWidth = max(rowWidth, max(input.size().width, output.size().width).rounded(.up) + (Constants.Widget.margin.x*2))
+            rowWidth = self.columnWidth(measured: max(input.size().width, output.size().width), minimum: rowWidth)
+            if let fixed = self.fixedDisplayWidth() {
+                rowWidth = max(8, fixed - width)
+                style.lineBreakMode = .byClipping
             }
             
-            var rect = CGRect(x: Constants.Widget.margin.x + x, y: inputY, width: rowWidth - (Constants.Widget.margin.x*2), height: rowHeight)
+            var rect = CGRect(x: Constants.Widget.margin.x + x, y: inputY, width: max(rowWidth - (Constants.Widget.margin.x*2), 0), height: rowHeight)
             input.draw(with: rect)
             
-            rect = CGRect(x: Constants.Widget.margin.x + x, y: outputY, width: rowWidth - (Constants.Widget.margin.x*2), height: rowHeight)
+            rect = CGRect(x: Constants.Widget.margin.x + x, y: outputY, width: max(rowWidth - (Constants.Widget.margin.x*2), 0), height: rowHeight)
             output.draw(with: rect)
             
             width += rowWidth
@@ -399,6 +432,14 @@ public class SpeedWidget: WidgetWrapper {
         }
         
         return width
+    }
+    
+    private func columnWidth(measured: CGFloat, minimum: CGFloat) -> CGFloat {
+        let textWidth = measured.rounded(.up)
+        if self.speedUnit != NetworkSpeedUnitAuto {
+            return max(minimum, textWidth + (Constants.Widget.margin.x*2))
+        }
+        return minimum
     }
     
     private func drawDots(_ width: CGFloat) {

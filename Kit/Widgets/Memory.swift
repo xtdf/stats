@@ -104,6 +104,9 @@ public class MemoryWidget: WidgetWrapper {
             width += x
         }
         
+        let total = self.layoutWidth(width + (Constants.Widget.margin.x*2))
+        width += total - (width + (Constants.Widget.margin.x*2))
+        
         var freeColor: NSColor = .controlAccentColor
         var usedColor: NSColor = .controlAccentColor
         switch self.colorState {
@@ -134,7 +137,7 @@ public class MemoryWidget: WidgetWrapper {
         str = NSAttributedString.init(string: value.1, attributes: attributes)
         str.draw(with: rect)
         
-        self.setWidth(width + (Constants.Widget.margin.x*2))
+        self.setWidth(self.layoutWidth(width + (Constants.Widget.margin.x*2)))
     }
     
     public func setValue(_ value: (String, String), usedPercentage: Double) {
